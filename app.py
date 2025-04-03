@@ -60,7 +60,7 @@ def send_data_for_client(location_id):
             del location_threads[location_id]  # Delete thread entry
 
     # Log the active threads
-    log_active_threads()            
+    #log_active_threads()            
 
 
 
@@ -97,26 +97,35 @@ def handle_connect():
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    location_id = request.args.get('location_id')  # ดึง location_id ที่ส่งมาจาก client
+    try:
+        location_id = request.args.get('location_id')  # ดึง location_id ที่ส่งมาจาก client
 
-    if location_id:
-        # ลดจำนวน client ที่เชื่อมต่อใน location_id
-        location_client_counts[location_id] -= 1
-        print(f"Client {request.sid} ตัดการเชื่อมต่อที่ location {location_id}! จำนวน client: {location_client_counts[location_id]}")
+        if location_id:
+            # ตรวจสอบว่ามี location_id นี้อยู่ใน location_client_counts
+            if location_id in location_client_counts:
+                # ลดจำนวน client ที่เชื่อมต่อใน location_id
+                location_client_counts[location_id] -= 1
+                print(f"Client {request.sid} ตัดการเชื่อมต่อที่ location {location_id}! จำนวน client: {location_client_counts[location_id]}")
 
-        # ถ้าไม่มี client เชื่อมต่อแล้ว ให้หยุด thread
-        if location_client_counts[location_id] < 1:
-            print(f"No more clients for location {location_id}, stopping data send thread.")
-            
-            # ลบ location_id จาก dictionary และหยุด thread
-            with location_thread_lock:  # Ensure thread safety when modifying shared resource
-                if location_id in location_threads:
-                    del location_client_counts[location_id]
-                    del location_threads[location_id]
-                    leave_room(location_id)  # Exit the room
-                    print(f"Thread for location {location_id} has been removed.")
-                    socketio.server.eio.close(request.sid)  # Ensure that the connection is properly closed
-                    print(f"Closed connection for client {request.sid}")
+                # ถ้าไม่มี client เชื่อมต่อแล้ว ให้หยุด thread
+                if location_client_counts[location_id] < 1:
+                    print(f"No more clients for location {location_id}, stopping data send thread.")
+
+                    # ลบ location_id จาก dictionary และหยุด thread
+                    with location_thread_lock:  # Ensure thread safety when modifying shared resource
+                        if location_id in location_threads:
+                            del location_client_counts[location_id]
+                            del location_threads[location_id]
+                            leave_room(location_id)  # Exit the room
+                            print(f"Thread for location {location_id} has been removed.")
+                            socketio.server.eio.close(request.sid)  # Ensure that the connection is properly closed
+                            print(f"Closed connection for client {request.sid}")
+            else:
+                print(f"No location_id found in location_client_counts for {location_id}")
+    except Exception as e:
+        print(f"เกิดข้อผิดพลาด: {e}")
+        # หากต้องการ, คุณสามารถทำการจัดการข้อผิดพลาดที่นี่ได้ เช่น ส่งข้อความกลับไปที่ client
+
 
 if __name__ == '__main__':
     socketio.run(app, host="0.0.0.0", port=5000)
